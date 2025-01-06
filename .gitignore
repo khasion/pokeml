@@ -1,0 +1,32 @@
+# Ignore everything in the data folder
+huggingface-pokemon/*
+kaggle-pokemon/*
+
+# Except the starter Pokémon and Pikachu
+!huggingface-pokemon/Charmander/
+!huggingface-pokemon/Charmeleon/
+!huggingface-pokemon/Charizard/
+!huggingface-pokemon/Bulbasaur/
+!huggingface-pokemon/Ivysaur/
+!huggingface-pokemon/Venusaur/
+!huggingface-pokemon/Squirtle/
+!huggingface-pokemon/Wartortle/
+!huggingface-pokemon/Blastoise/
+!huggingface-pokemon/Pikachu/
+!huggingface-pokemon/Raichu/
+
+!kaggle-pokemon/Charmander/
+!kaggle-pokemon/Charmeleon/
+!kaggle-pokemon/Charizard/
+!kaggle-pokemon/Bulbasaur/
+!kaggle-pokemon/Ivysaur/
+!kaggle-pokemon/Venusaur/
+!kaggle-pokemon/Squirtle/
+!kaggle-pokemon/Wartortle/
+!kaggle-pokemon/Blastoise/
+!kaggle-pokemon/Pikachu/
+!kaggle-pokemon/Raichu/
+
+# Ignore any files directly in the data directory
+huggingface-pokemon/*.*
+kaggle-pokemon/*.*

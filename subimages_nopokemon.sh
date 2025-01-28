@@ -1,28 +1,38 @@
 #!/bin/bash
 
-# Directory containing the images
-SOURCE_DIR="no-pokemon"
+# Set the target directory
+BASE_DIR="no-pokemon"
 
-# Output directory for subimages
-OUTPUT_DIR="subimages"
+# Check if ImageMagick is installed
+if ! command -v convert &> /dev/null; then
+  echo "Error: ImageMagick is not installed. Install it and try again."
+  exit 1
+fi
 
-# Create output directory if it doesn't exist
-mkdir -p "$OUTPUT_DIR"
+# Function to split images
+split_image() {
+  local image_path="$1"
+  local image_dir=$(dirname "$image_path")
+  local image_name=$(basename "$image_path" .png)
 
-# Process each .png file in the directory and its subdirectories
-find "$SOURCE_DIR" -type f -name "*.png" | while read -r IMAGE_PATH; do
-  # Get the base filename without extension and the directory
-  BASENAME=$(basename "$IMAGE_PATH" .png)
-  IMAGE_DIR=$(dirname "$IMAGE_PATH")
-  
-  # Create a subdirectory for this image's subimages in the output directory
-  IMAGE_OUTPUT_DIR="$OUTPUT_DIR/$BASENAME"
-  mkdir -p "$IMAGE_OUTPUT_DIR"
+  # Create a temporary directory for output to avoid clutter
+  temp_dir="${image_dir}/${image_name}_split"
 
-  echo "Processing: $IMAGE_PATH"
-  
-  # Use ImageMagick to crop the image into 128x128 subimages
-  convert "$IMAGE_PATH" -crop 128x128 +repage "$IMAGE_OUTPUT_DIR/${BASENAME}_%d.png"
-done
+  mkdir -p "$temp_dir"
 
-echo "All images have been split into 128x128 subimages and saved to $OUTPUT_DIR."
+  # Use ImageMagick's convert command to split the image
+  convert "$image_path" -crop 128x128 +repage "${temp_dir}/${image_name}_%d.png"
+
+  # Move the cropped files back to the original directory and clean up the temp folder
+  mv "${temp_dir}"/* "$image_dir"
+  rmdir "$temp_dir"
+  echo "Split $image_path into 128x128 subimages in $image_dir"
+}
+
+# Export function for use with find
+export -f split_image
+
+# Find all .png images in the directory and apply the split_image function
+find "$BASE_DIR" -type f -name "*.png" -exec bash -c 'split_image "$0"' {} \;
+
+echo "All images have been processed."

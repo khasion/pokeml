@@ -51,7 +51,7 @@ class FeatureExtractor:
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         lbp = local_binary_pattern(gray, P=8, R=1, method='uniform')
         lbp_hist = np.histogram(lbp.ravel(), bins=256, range=(0, 256))[0]
-        
+
         # HSV Color Features
         hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV) 
         hist_h = np.histogram(hsv[:,:,0], bins=COLOR_BINS, range=(0,180))[0]
@@ -284,7 +284,7 @@ class PokemonDetector:
 
 if __name__ == '__main__':
     # Train and save models (run once)
-    main()
+    #main()
     
     # Example usage
     detector = PokemonDetector()

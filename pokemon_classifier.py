@@ -39,37 +39,57 @@ class FeatureExtractor:
         self.kmeans = sift_kmeans
         self.scaler_bin = StandardScaler()
         self.scaler_multi = StandardScaler()
-        
-    def extract_basic_features(self, img):
-        # HOG Features
-        hog_feat = hog(img, orientations=HOG_ORIENTATIONS,
-                      pixels_per_cell=HOG_PIXELS_PER_CELL,
-                      cells_per_block=HOG_CELLS_PER_BLOCK,
-                      channel_axis=-1)
-        
-        # LBP Features
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        lbp = local_binary_pattern(gray, P=8, R=1, method='uniform')
-        lbp_hist = np.histogram(lbp.ravel(), bins=256, range=(0, 256))[0]
 
-        # HSV Color Features
-        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV) 
-        hist_h = np.histogram(hsv[:,:,0], bins=COLOR_BINS, range=(0,180))[0]
-        hist_s = np.histogram(hsv[:,:,1], bins=COLOR_BINS, range=(0,256))[0]
-        hist_v = np.histogram(hsv[:,:,2], bins=COLOR_BINS, range=(0,256))[0]
+    def extract_basic_features(self, img):
+        """Enhanced color-aware feature extraction"""
+        # Multi-channel HOG (RGB)
+        hog_features = []
+        for channel in range(3):  # Process each RGB channel
+            hog_feat = hog(img[:, :, channel], 
+                          orientations=HOG_ORIENTATIONS,
+                          pixels_per_cell=HOG_PIXELS_PER_CELL,
+                          cells_per_block=HOG_CELLS_PER_BLOCK)
+            hog_features.append(hog_feat)
+        hog_features = np.concatenate(hog_features)
+
+        # Color-Enhanced LBP (LAB color space)
+        lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
+        lbp_features = []
+        for channel in range(3):
+            lbp = local_binary_pattern(lab[:, :, channel], P=8, R=1, method='uniform')
+            hist = np.histogram(lbp.ravel(), bins=256, range=(0, 256))[0]
+            lbp_features.append(hist)
+        lbp_features = np.concatenate(lbp_features)
+
+        # Perceptual Color Histograms (HSV + LAB)
+        hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
         
-        return np.concatenate([hog_feat, lbp_hist, hist_h, hist_s, hist_v])
-    
+        color_features = []
+        for space in [hsv, lab]:
+            for channel in range(3):
+                hist = np.histogram(space[:, :, channel], 
+                                   bins=COLOR_BINS,
+                                   range=(0, 255))[0]
+                color_features.append(hist)
+        color_features = np.concatenate(color_features)
+
+        return np.concatenate([hog_features, lbp_features, color_features])
+
     def extract_sift_features(self, img):
-        gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) # Maybe remove
-        _, des = self.sift.detectAndCompute(gray, None)
+        """Color-enhanced SIFT using dominant color channel"""
+        # Find channel with highest contrast
+        variances = [np.var(img[:, :, i]) for i in range(3)]
+        dominant_channel = np.argmax(variances)
+        
+        _, des = self.sift.detectAndCompute(img[:, :, dominant_channel], None)
         
         if des is None or len(des) < 5:
             return np.zeros(SIFT_CLUSTERS)
         
         clusters = self.kmeans.predict(des)
         return np.bincount(clusters, minlength=SIFT_CLUSTERS)
-    
+
     def extract_all_features(self, img):
         basic = self.extract_basic_features(img)
         sift = self.extract_sift_features(img)
@@ -274,8 +294,10 @@ class PokemonDetector:
             pred_probs = self.multi_clf.predict_proba(features)[0]
             pred = np.argmax(pred_probs)
 
-            if pred_probs[pred] >= 0.5:
-                predictions.append(self.le.inverse_transform([pred])[0])
+
+            if pred_probs[pred] >= .2:
+                prediction = self.le.inverse_transform([pred])[0]
+                predictions.append(prediction)
                 #print(predictions[len(predictions)-1])
                 #imgplot = plt.imshow(tile)
                 #plt.show()
@@ -293,3 +315,4 @@ if __name__ == '__main__':
     print("Predictions:", detector.predict('test_image2.png')) # [Bulbasaur, Ivysaur, Venusaur, Squirtle, Wartotle, Blastoise, Charmander, Charmeleon, Charizard]
     print("Predictions:", detector.predict('test_image3.png')) # [Charmander, Squirtle, Bulbasaur]
     print("Predictions:", detector.predict('test_image4.png')) # [Bulbasaur, Ivysaur, Venusaur, Squirtle, Wartotle, Blastoise, Charmander, Charmeleon, Charizard]
+    print("Predictions:", detector.predict('test_image5.png')) # [Pikachu]

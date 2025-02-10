@@ -2,6 +2,9 @@
 huggingface-pokemon/*
 kaggle-pokemon/*
 
+# Ignore models
+models/*
+
 # Except the starter Pokémon and Pikachu
 !huggingface-pokemon/Charmander/
 !huggingface-pokemon/Charmeleon/

@@ -50,6 +50,8 @@ from sklearn.cluster import MiniBatchKMeans
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+import albumentations as A
+
 
 # ======================
 # Configuration
@@ -68,7 +70,10 @@ USE_PCA = False  # Try setting to False if needed
 # Toggle SIFT
 USE_SIFT = True
 # Adjust the threshold probability for multi-class predictions during inference.
-THRESHOLD_PROB = 0.00  # Lowering from 0.2 may yield more detections
+THRESHOLD_PROB = 0.10  # Lowering from 0.2 may yield more detections
+# Toggle Image Augmentation
+USE_AUG = True
+
 
 # Toggle hyperparameter tuning
 DO_HYPERPARAMETER_TUNING = True
@@ -78,6 +83,37 @@ POKEMON_DIR = 'pokemon-data'
 NO_POKEMON_DIR = 'no-pokemon'
 MODEL_SAVE_DIR = 'models'
 os.makedirs(MODEL_SAVE_DIR, exist_ok=True)
+
+# Data Augmentation Pipeline
+transform = A.Compose([
+    A.HorizontalFlip(p=0.5),
+    A.Rotate(limit=90, p=0.5),
+    A.RandomBrightnessContrast(p=0.5),
+    A.GaussNoise(p=0.5),
+    A.Resize(height=TARGET_SIZE[0], width=TARGET_SIZE[1])
+])
+
+
+def transform_image(img, target_size=TARGET_SIZE):
+    """
+    Reads an image from disk, ensures it is 8-bit RGB, and resizes it to the target size.
+    This function should be used during both training and inference.
+    """
+    # Read image with unchanged flag to capture any alpha channels or unusual bit depths
+    if img is None:
+        return None
+    # If image has 4 channels (e.g., BGRA), convert to BGR
+    #if len(img.shape) == 3 and img.shape[2] == 4:
+        #img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+    # Ensure image is in 8-bit format
+    if img.dtype != np.uint8:
+        img = cv2.convertScaleAbs(img)
+    # Convert BGR to RGB
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    # Resize the image
+
+    img = cv2.resize(img, target_size)
+    return img
 
 # ======================
 # Feature Extraction
@@ -178,16 +214,18 @@ def load_images(path, target_size=TARGET_SIZE):
         img_path = os.path.join(path, fname)
         # Read image with unchanged flag to capture any alpha channels or unusual bit depths
         img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
-        if img is not None:
-            # If image has 4 channels (e.g., BGRA), convert to BGR
-            if len(img.shape) == 3 and img.shape[2] == 4:
-                img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-            # Ensure image is in 8-bit format
-            if img.dtype != np.uint8:
-                img = cv2.convertScaleAbs(img)
-            # Convert BGR to RGB
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            img = cv2.resize(img, target_size)
+        img = transform_image(img)
+        if img is not None:      
+            if USE_AUG:
+                augmented = transform(image=img)
+                augmented_img = augmented['image']
+                #plt.figure()
+                #plt.imshow(augmented_img) 
+                #plt.show()
+                images.append(augmented_img)
+            #plt.figure()
+            #plt.imshow(img) 
+            #plt.show()
             images.append(img)
     return images
 
@@ -223,10 +261,10 @@ def recursive_tiling(image, depth=0, min_size=SEGMENT_MIN_SIZE, current_tiles=No
     half_h = image.shape[0] // 2
     half_w = image.shape[1] // 2
     
-    #recursive_tiling(image[:half_h, :half_w], depth+1, min_size, current_tiles)
-    #recursive_tiling(image[:half_h, half_w:], depth+1, min_size, current_tiles)
-    #recursive_tiling(image[half_h:, :half_w], depth+1, min_size, current_tiles)
-    #recursive_tiling(image[half_h:, half_w:], depth+1, min_size, current_tiles)
+    recursive_tiling(image[:half_h, :half_w], depth+1, min_size, current_tiles)
+    recursive_tiling(image[:half_h, half_w:], depth+1, min_size, current_tiles)
+    recursive_tiling(image[half_h:, :half_w], depth+1, min_size, current_tiles)
+    recursive_tiling(image[half_h:, half_w:], depth+1, min_size, current_tiles)
     
     return current_tiles
 
@@ -279,7 +317,7 @@ def main():
         fe = FeatureExtractor(sift_kmeans)
     else:
         fe = FeatureExtractor()
-    """
+    
     # ======================
     # Binary Classification
     # ======================
@@ -310,7 +348,7 @@ def main():
         }
         grid_bin = GridSearchCV(
             RandomForestClassifier(random_state=42, class_weight='balanced'),
-            param_grid_bin, cv=3, scoring='accuracy', n_jobs=-1, verbose=2
+            param_grid_bin, cv=3, scoring='accuracy', n_jobs=2, verbose=2
         )
         grid_bin.fit(X_train_bin, y_train_bin)
         print("Best parameters for binary classifier:", grid_bin.best_params_)
@@ -330,7 +368,7 @@ def main():
     if DO_HYPERPARAMETER_TUNING:
         del grid_bin
     gc.collect()
-    """
+    
     # ======================
     # Multi-class Classification
     # ======================
@@ -367,12 +405,12 @@ def main():
         #    'weights': ['uniform', 'distance']
         #}),
         'RForest': (RandomForestClassifier(random_state=42, class_weight='balanced'), {
-        'n_estimators': [200, 300],
-        'max_depth': [7, 10, 15],
+        'n_estimators': [100],
+        'max_depth': [5],
         'min_samples_split': [10],
-        'min_samples_leaf': [5],
-        'max_features': [None],
-        'bootstrap': [True]
+        'min_samples_leaf': [5]
+        #'max_features': [None],
+        #'bootstrap': [False]
         })
     }
     
@@ -380,7 +418,7 @@ def main():
         if DO_HYPERPARAMETER_TUNING:
             print(f"\nTuning {model_name}...")
             grid = GridSearchCV(
-                model, param_grid, cv=3, scoring='accuracy', n_jobs=-1, verbose=2
+                model, param_grid, cv=3, scoring='accuracy', n_jobs=2, verbose=2
             )
             grid.fit(X_train_multi, y_train_multi)
             print(f"Best parameters for {model_name}:", grid.best_params_)
@@ -427,19 +465,18 @@ class PokemonDetector:
         if img is None:
             return []
         
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        all_tiles = recursive_tiling(img_rgb)
+        all_tiles = recursive_tiling(img)
         
         candidate_tiles = all_tiles
-        #filter_positive_tiles(
-        #    all_tiles, self.binary_clf, self.fe, self.scaler_bin,
-        #    pca=self.pca_bin if self.use_pca else None
-        #)
+        filter_positive_tiles(
+            all_tiles, self.binary_clf, self.fe, self.scaler_bin,
+            pca=self.pca_bin if self.use_pca else None
+        )
         # Further filter tiles that are too small
-        #candidate_tiles = [t for t in candidate_tiles if t.shape[0] >= SEGMENT_MIN_SIZE and t.shape[1] >= SEGMENT_MIN_SIZE]
+        candidate_tiles = [t for t in candidate_tiles if t.shape[0] >= SEGMENT_MIN_SIZE and t.shape[1] >= SEGMENT_MIN_SIZE]
         predictions = []
         for tile in candidate_tiles:
-            tile_resized = cv2.resize(tile, TARGET_SIZE)
+            tile_resized = transform_image(tile)
             features = self.fe.extract_all_features(tile_resized)
             features = self.scaler_multi.transform([features])
             if self.use_pca:
@@ -450,36 +487,36 @@ class PokemonDetector:
             
             class_labels = self.le.inverse_transform(np.arange(len(pred_probs)))  # Get class labels
     
-            for label, prob in zip(class_labels, pred_probs):
-                print(f"Class: {label}, Probability: {prob:.4f}")
+            #for label, prob in zip(class_labels, pred_probs):
+                #print(f"Class: {label}, Probability: {prob:.4f}")
 
             if pred_probs[pred] >= THRESHOLD_PROB:
                 prediction = self.le.inverse_transform([pred])[0]
                 predictions.append(prediction)
                 print(prediction, pred_probs[pred])
-                #plt.figure()
-                #plt.imshow(tile) 
-                #plt.show()
+                plt.figure()
+                plt.imshow(tile)
+                plt.show()
         
         return list(set(predictions))
 
 if __name__ == '__main__':
     # Train and save models (run once)
-    main()
+    #main()
     
     # Example usage
     detector = PokemonDetector(model_name='rforest')
     
-    #print("Predictions on test_image0.png:", detector.predict('test_image0.png'))
-    #print("Predictions on test_image1.png:", detector.predict('test_image1.png'))
-    #print("Predictions on test_image2.png:", detector.predict('test_image2.png'))
-    #print("Predictions on test_image3.png:", detector.predict('test_image3.png'))
-    #print("Predictions on test_image4.png:", detector.predict('test_image4.png'))
-    #print("Predictions on test_image5.png:", detector.predict('test_image5.png'))
+    print("Predictions on test_image0.png:", detector.predict('test_image0.png'))
+    print("Predictions on test_image1.png:", detector.predict('test_image1.png'))
+    print("Predictions on test_image2.png:", detector.predict('test_image2.png'))
+    print("Predictions on test_image3.png:", detector.predict('test_image3.png'))
+    print("Predictions on test_image4.png:", detector.predict('test_image4.png'))
+    print("Predictions on test_image5.png:", detector.predict('test_image5.png'))
     
     print("Predictions on test_squirtle.png:", detector.predict('test_squirtle.png'))
-    #print("Predictions on test_pikachu.png:", detector.predict('test_pikachu.png'))
+    print("Predictions on test_pikachu.png:", detector.predict('test_pikachu.png'))
     print("Predictions on test_raichu.png:", detector.predict('test_raichu.png'))
-    #print("Predictions on test_bulb_pika.png:", detector.predict('test_bulb_pika.png'))
-    #print("Predictions on test_wartotle.png:", detector.predict('test_wartotle.png'))
+    print("Predictions on test_bulb_pika.png:", detector.predict('test_bulb_pika.png'))
+    print("Predictions on test_wartotle.png:", detector.predict('test_wartotle.png'))
     print("Predictions on test_charmander.png:", detector.predict('test_charmander.png'))

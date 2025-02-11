@@ -1,1 +1,0 @@
-python3 image_preprocessing.py input_folder output_folder --target_size 128 128

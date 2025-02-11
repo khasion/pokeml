@@ -144,3 +144,27 @@ RForest Performance:
     accuracy                           0.48       319
    macro avg       0.52      0.49      0.48       319
 weighted avg       0.52      0.48      0.48       319
+
+
+after more pictures
+
+Best parameters for RForest: {'class_weight': 'balanced', 'max_depth': None, 'max_features': None, 'min_samples_leaf': 4, 'min_samples_split': 2, 'n_estimators': 100, 'n_jobs': -1, 'verbose': 1}
+
+RForest Performance:
+              precision    recall  f1-score   support
+
+   Blastoise       0.75      0.70      0.73        57
+   Bulbasaur       0.76      0.84      0.80        56
+   Charizard       0.50      0.44      0.47        41
+  Charmander       0.70      0.65      0.67        48
+  Charmeleon       0.73      0.78      0.75        58
+     Ivysaur       0.78      0.63      0.70        60
+     Pikachu       0.85      0.70      0.76        79
+      Raichu       0.64      0.74      0.69        66
+    Squirtle       0.70      0.65      0.67        62
+    Venusaur       0.61      0.76      0.68        55
+   Wartortle       0.66      0.76      0.71        55
+
+    accuracy                           0.70       637
+   macro avg       0.70      0.70      0.69       637
+weighted avg       0.71      0.70      0.70       637

@@ -103,8 +103,8 @@ def transform_image(img, target_size=TARGET_SIZE):
     if img is None:
         return None
     # If image has 4 channels (e.g., BGRA), convert to BGR
-    #if len(img.shape) == 3 and img.shape[2] == 4:
-        #img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+    if len(img.shape) == 3 and img.shape[2] == 4:
+        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
     # Ensure image is in 8-bit format
     if img.dtype != np.uint8:
         img = cv2.convertScaleAbs(img)
@@ -273,6 +273,7 @@ def filter_positive_tiles(tiles, classifier, feature_extractor, scaler, pca=None
     positive_tiles = []
     for tile in tiles:
         resized = cv2.resize(tile, TARGET_SIZE) if tile.shape[:2] != TARGET_SIZE else tile
+        resized = transform_image(resized)
         features = feature_extractor.extract_all_features(resized)
         features = scaler.transform([features])
         if pca is not None:
@@ -461,14 +462,14 @@ class PokemonDetector:
             self.pca_multi = joblib.load(os.path.join(MODEL_SAVE_DIR, 'pca_multi.pkl'))
         
     def predict(self, image_path):
-        img = cv2.imread(image_path)
+        img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
         if img is None:
             return []
         
         all_tiles = recursive_tiling(img)
         
         candidate_tiles = all_tiles
-        filter_positive_tiles(
+        candidate_tiles = filter_positive_tiles(
             all_tiles, self.binary_clf, self.fe, self.scaler_bin,
             pca=self.pca_bin if self.use_pca else None
         )
@@ -493,10 +494,10 @@ class PokemonDetector:
             if pred_probs[pred] >= THRESHOLD_PROB:
                 prediction = self.le.inverse_transform([pred])[0]
                 predictions.append(prediction)
-                print(prediction, pred_probs[pred])
-                plt.figure()
-                plt.imshow(tile)
-                plt.show()
+                #print(prediction, pred_probs[pred])
+                #plt.figure()
+                #plt.imshow(tile_resized)
+                #plt.show()
         
         return list(set(predictions))
 

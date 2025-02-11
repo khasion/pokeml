@@ -68,7 +68,7 @@ USE_PCA = False  # Try setting to False if needed
 # Toggle SIFT
 USE_SIFT = True
 # Adjust the threshold probability for multi-class predictions during inference.
-THRESHOLD_PROB = 0.35  # Lowering from 0.2 may yield more detections
+THRESHOLD_PROB = 0.00  # Lowering from 0.2 may yield more detections
 
 # Toggle hyperparameter tuning
 DO_HYPERPARAMETER_TUNING = True
@@ -223,10 +223,10 @@ def recursive_tiling(image, depth=0, min_size=SEGMENT_MIN_SIZE, current_tiles=No
     half_h = image.shape[0] // 2
     half_w = image.shape[1] // 2
     
-    recursive_tiling(image[:half_h, :half_w], depth+1, min_size, current_tiles)
-    recursive_tiling(image[:half_h, half_w:], depth+1, min_size, current_tiles)
-    recursive_tiling(image[half_h:, :half_w], depth+1, min_size, current_tiles)
-    recursive_tiling(image[half_h:, half_w:], depth+1, min_size, current_tiles)
+    #recursive_tiling(image[:half_h, :half_w], depth+1, min_size, current_tiles)
+    #recursive_tiling(image[:half_h, half_w:], depth+1, min_size, current_tiles)
+    #recursive_tiling(image[half_h:, :half_w], depth+1, min_size, current_tiles)
+    #recursive_tiling(image[half_h:, half_w:], depth+1, min_size, current_tiles)
     
     return current_tiles
 
@@ -279,7 +279,7 @@ def main():
         fe = FeatureExtractor(sift_kmeans)
     else:
         fe = FeatureExtractor()
-    
+    """
     # ======================
     # Binary Classification
     # ======================
@@ -310,7 +310,7 @@ def main():
         }
         grid_bin = GridSearchCV(
             RandomForestClassifier(random_state=42, class_weight='balanced'),
-            param_grid_bin, cv=3, scoring='accuracy', n_jobs=2, verbose=2
+            param_grid_bin, cv=3, scoring='accuracy', n_jobs=-1, verbose=2
         )
         grid_bin.fit(X_train_bin, y_train_bin)
         print("Best parameters for binary classifier:", grid_bin.best_params_)
@@ -330,7 +330,7 @@ def main():
     if DO_HYPERPARAMETER_TUNING:
         del grid_bin
     gc.collect()
-
+    """
     # ======================
     # Multi-class Classification
     # ======================
@@ -367,9 +367,12 @@ def main():
         #    'weights': ['uniform', 'distance']
         #}),
         'RForest': (RandomForestClassifier(random_state=42, class_weight='balanced'), {
-            'n_estimators': [100, 150, 200],
-            'max_depth': [None, 10, 20],
-            'min_samples_split': [2, 5, 10]
+        'n_estimators': [200, 300],
+        'max_depth': [7, 10, 15],
+        'min_samples_split': [10],
+        'min_samples_leaf': [5],
+        'max_features': [None],
+        'bootstrap': [True]
         })
     }
     
@@ -377,7 +380,7 @@ def main():
         if DO_HYPERPARAMETER_TUNING:
             print(f"\nTuning {model_name}...")
             grid = GridSearchCV(
-                model, param_grid, cv=3, scoring='accuracy', n_jobs=2, verbose=2
+                model, param_grid, cv=3, scoring='accuracy', n_jobs=-1, verbose=2
             )
             grid.fit(X_train_multi, y_train_multi)
             print(f"Best parameters for {model_name}:", grid.best_params_)
@@ -427,12 +430,13 @@ class PokemonDetector:
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         all_tiles = recursive_tiling(img_rgb)
         
-        candidate_tiles = filter_positive_tiles(
-            all_tiles, self.binary_clf, self.fe, self.scaler_bin,
-            pca=self.pca_bin if self.use_pca else None
-        )
+        candidate_tiles = all_tiles
+        #filter_positive_tiles(
+        #    all_tiles, self.binary_clf, self.fe, self.scaler_bin,
+        #    pca=self.pca_bin if self.use_pca else None
+        #)
         # Further filter tiles that are too small
-        candidate_tiles = [t for t in candidate_tiles if t.shape[0] >= SEGMENT_MIN_SIZE and t.shape[1] >= SEGMENT_MIN_SIZE]
+        #candidate_tiles = [t for t in candidate_tiles if t.shape[0] >= SEGMENT_MIN_SIZE and t.shape[1] >= SEGMENT_MIN_SIZE]
         predictions = []
         for tile in candidate_tiles:
             tile_resized = cv2.resize(tile, TARGET_SIZE)
@@ -443,13 +447,19 @@ class PokemonDetector:
             
             pred_probs = self.multi_clf.predict_proba(features)[0]
             pred = np.argmax(pred_probs)
+            
+            class_labels = self.le.inverse_transform(np.arange(len(pred_probs)))  # Get class labels
+    
+            for label, prob in zip(class_labels, pred_probs):
+                print(f"Class: {label}, Probability: {prob:.4f}")
+
             if pred_probs[pred] >= THRESHOLD_PROB:
                 prediction = self.le.inverse_transform([pred])[0]
                 predictions.append(prediction)
                 print(prediction, pred_probs[pred])
-                plt.figure()
-                plt.imshow(tile) 
-                plt.show()
+                #plt.figure()
+                #plt.imshow(tile) 
+                #plt.show()
         
         return list(set(predictions))
 
@@ -458,18 +468,18 @@ if __name__ == '__main__':
     main()
     
     # Example usage
-    detector = PokemonDetector(model_name='xgboost')
+    detector = PokemonDetector(model_name='rforest')
     
-    print("Predictions on test_image0.png:", detector.predict('test_image0.png'))
-    print("Predictions on test_image1.png:", detector.predict('test_image1.png'))
-    print("Predictions on test_image2.png:", detector.predict('test_image2.png'))
-    print("Predictions on test_image3.png:", detector.predict('test_image3.png'))
-    print("Predictions on test_image4.png:", detector.predict('test_image4.png'))
-    print("Predictions on test_image5.png:", detector.predict('test_image5.png'))
+    #print("Predictions on test_image0.png:", detector.predict('test_image0.png'))
+    #print("Predictions on test_image1.png:", detector.predict('test_image1.png'))
+    #print("Predictions on test_image2.png:", detector.predict('test_image2.png'))
+    #print("Predictions on test_image3.png:", detector.predict('test_image3.png'))
+    #print("Predictions on test_image4.png:", detector.predict('test_image4.png'))
+    #print("Predictions on test_image5.png:", detector.predict('test_image5.png'))
     
     print("Predictions on test_squirtle.png:", detector.predict('test_squirtle.png'))
-    print("Predictions on test_pikachu.png:", detector.predict('test_pikachu.png'))
+    #print("Predictions on test_pikachu.png:", detector.predict('test_pikachu.png'))
     print("Predictions on test_raichu.png:", detector.predict('test_raichu.png'))
-    print("Predictions on test_raichu.png:", detector.predict('test_bulb_pika.png'))
-    print("Predictions on test_raichu.png:", detector.predict('test_wartotle.png'))
-    print("Predictions on test_raichu.png:", detector.predict('test_charmander.png'))
+    #print("Predictions on test_bulb_pika.png:", detector.predict('test_bulb_pika.png'))
+    #print("Predictions on test_wartotle.png:", detector.predict('test_wartotle.png'))
+    print("Predictions on test_charmander.png:", detector.predict('test_charmander.png'))

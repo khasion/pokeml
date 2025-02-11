@@ -503,7 +503,7 @@ class PokemonDetector:
 
 if __name__ == '__main__':
     # Train and save models (run once)
-    #main()
+    main()
     
     # Example usage
     detector = PokemonDetector(model_name='rforest')
